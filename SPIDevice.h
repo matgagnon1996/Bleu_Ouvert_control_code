@@ -9,10 +9,11 @@
 #define SPIDEVICE_H_
 
 #include <unistd.h>
+#include <stdint.h>
 
 void initSPI();
 void readTemperatureSPI(char*, size_t);
-void setPotentiometerValueSPI(int);
+void setPotentiometerValueSPI(uint8_t);
 
 
 

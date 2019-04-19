@@ -1,7 +1,7 @@
 #include "hx711.h"
 
 #define HX711_SLOPE  0.176136363
-#define HX711_OFFSET -55957.00548
+#define HX711_OFFSET -43027.00548//-55957.00548
 
 int setupGPIO(HX711 *hx)
 {

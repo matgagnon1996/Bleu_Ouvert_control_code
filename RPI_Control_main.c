@@ -8,10 +8,11 @@
 //debug defines
 //#define _DEBUG
 #define _CONNECTED
-//#define _ADC_CONNECTED
+#define _ADC_CONNECTED
 #define _POLOLU_CONNECTED
 #define _TEMP_CONNECTED
-//#define _SCALE_CONNECTED
+#define _SCALE_CONNECTED
+#define _CRUSHER_CONNECTED
 
 #include <stdio.h>
 #include <string.h>
@@ -32,6 +33,9 @@
 #include "FSM_crusher.h"
 #include "FSM_extruder.h"
 #include "asservissementTemperature.h"
+
+// à enlever
+#include "crusher.h"
 
 // boolean to stop thread
 static volatile int terminated = 0;
@@ -72,6 +76,10 @@ int main(int argc, const char* argv[])
 	}
 #endif // _POLOLU_CONNECTED
 
+#ifdef _CRUSHER_CONNECTED
+	initCrusherMotor();
+#endif
+
 #ifdef _ADC_CONNECTED
 	// init ADC
 	int retourInitADC = initADS1115();
@@ -106,7 +114,6 @@ int main(int argc, const char* argv[])
 	reset(hx711Sruct);
 #endif //_SCALE_CONNECTED
 
-	//zeroScale(hx711Sruct);
 #endif //_CONNECTED
 
 	const char* serverName = "math-main-pi.local";
@@ -201,7 +208,7 @@ void *statusThreadFunction(void* param)
 
 #ifdef _SCALE_CONNECTED
 		// read weight and send
-		unsigned int weight = getRawData(hx711Sruct);
+		unsigned int weight = getRawDataMean(hx711Sruct,10);
 		double poidsG = voltageToWeight(weight);
 		sprintf(valueToSend, "%.5g", poidsG);
 		printf("Poids count: %u \n", weight);
@@ -241,48 +248,9 @@ void *statusThreadFunction(void* param)
 		/******************** FIN VRAI CODE À TESTER POUR LECTURE DES COMPOSANTS ****************************/
 #endif //_CONNECTED
 
-#ifdef _DEBUG
-		// code de test d'affichage des données
-		// send random temeprature status
-		random_value = getRandom(0,200);
-		sprintf(valueToSend, "%.2g", random_value);
-		mainFsmStatus->extruderTemperature = random_value;
-		sendError = sendMessage(socketFd,(char*)( &valueToSend), strlen(valueToSend), STS_TEMPERATURE_MSG, RPI_CONTROL_ID);
-
-		//send random weight status
-		random_value = getRandom(0,2000);
-		sprintf(valueToSend, "%.2g", random_value);
-		mainFsmStatus->convoyWeight = random_value;
-		sendError = sendMessage(socketFd, (char*)( &valueToSend), strlen(valueToSend), STS_WEIGHT_MSG, RPI_CONTROL_ID);
-
-
-		// send FSM status
-		if(count % 2 == 0)
-		{
-			sendError = sendMessage(socketFd, "Chauffage extrudeur", strlen("Chauffage extrudeur"), STS_FSM_MSG, RPI_CONTROL_ID);
-			memcpy(mainFsmStatus->fsmExtruderStatus, "Chauffage extrudeur", strlen("Chauffage extrudeur"));
-		}else
-		{
-			sendError = sendMessage(socketFd, "Mesure du poids", strlen("Mesure du poids"), STS_FSM_MSG, RPI_CONTROL_ID);
-			memcpy(mainFsmStatus->fsmExtruderStatus, "Mesure du poids", strlen("Mesure du poids"));
-		}
-		// send blocked or not
-		if(count >= 10000)
-		{
-			sendError = sendMessage(socketFd, "false", strlen("false"), STS_CRUSHER_BLOCKED_MSG, RPI_CONTROL_ID);
-			mainFsmStatus->crusherIsBlocked = 0;
-		}else
-		{
-			sendError = sendMessage(socketFd, "true", strlen("true"), STS_CRUSHER_BLOCKED_MSG, RPI_CONTROL_ID);
-			mainFsmStatus->crusherIsBlocked = 1;
-		}
-
-		count++;
-#endif //_DEBUG
-
 		if(terminated == 1)break;
 
-		sleep(1);//usleep(500000);
+		sleep(1);
 	}
 
 	// free and exit
@@ -312,7 +280,7 @@ void *commandThreadFunction(void* param)
 		{
 			case MANUAL_CMD_SERVO:
 				// set motor to position
-				if(((t_pololu_cmd*)message)->channel == 1)
+				if(((t_pololu_cmd*)message)->channel == 0)
 				{
 					int value = ((t_pololu_cmd*)message)->value;
 					double dutyCycle = ((double)value)/((double)2000.0);
@@ -320,7 +288,20 @@ void *commandThreadFunction(void* param)
 					printf("J'ai mis le pwm \n");
 				}else
 				{
-					setPosition(((t_pololu_cmd*)message)->channel, ((t_pololu_cmd*)message)->value);
+					//setPosition(((t_pololu_cmd*)message)->channel, ((t_pololu_cmd*)message)->value);
+
+					if(((t_pololu_cmd*)message)->channel == 3)
+					{
+						printf("j'arrête le moteur");
+						stopCrusherMotor(20);
+						printf("J'ai finis d'arrêter le moteur");
+					}
+					else
+					{
+						printf("Je démarrer le moteur");
+						startCrusherMotor(20);
+						printf("J'ai finis de démarrer le moteur");
+					}
 					printf("allo \n");
 				}
 
@@ -336,26 +317,19 @@ void *commandThreadFunction(void* param)
 				// start FSM
 				startCrusherFSM();
 
-
-				// verify that extuder mode is not requested
-				// if same mode is requested, continue
-				// if other mode is requested, send error, we have to stop before chaging mode
 				break;
 
 			case EXTRUDER_MODE_CMD:
 				//begin extruder mode
 				mainFsmStatus->requestedTemperature = atof(message);
 				startExtruderFSM();
-				// verify that CRUSHER mode is not requested
-				// if same mode is requested, continue
-				// if other mode is requested, send error, we have to stop before chaging mode
+
 				break;
 
 			case HEATER_MANUAL_CMD:
 				// begin asservissement of heater
 				mainFsmStatus->requestedTemperature = atof(message);
 				setTemperatureCommand();
-
 				// start enslavement
 				mainFsmStatus->enslavementStarted = 1;
 				break;
@@ -394,9 +368,6 @@ void *asservissementTemperatureThreadFunction(void* param)
 			printf("Actual temp : %f \n", mainFsmStatus->extruderTemperature);
 			commandToApply = calculateActionToApply(mainFsmStatus->extruderTemperature); // duty cycle
 			printf("Voltage to apply : %f\n", commandToApply);
-			commandToApply = voltageToDutyCycle(commandToApply);
-
-			printf("Command to apply : %f \n", commandToApply);
 
 			// apply command to extruder
 			setPWM(commandToApply);
@@ -431,17 +402,6 @@ void *FSMThreadFunction(void* param)
 
 		usleep(500000);
 	}
-}
-
-double getRandom(double min,double max)
-{
-	srand(time(NULL));
-	double random_value ;
-	double range = max - min;
-	double div = RAND_MAX / range;
-
-	// generate random value
-	return random_value = min + (rand()/div);
 }
 
 

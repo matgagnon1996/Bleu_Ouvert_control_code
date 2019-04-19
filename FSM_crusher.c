@@ -26,11 +26,11 @@
 #define FSM_CRUSHER_TERMINATED_ERROR						2
 
 #define FSM_CRUSHER_MOTOR_INCREMENT							100
-#define FSM_CRUSHER_MAX_WEIGHT_CONVOY						1000 // 1 kG
-#define FSM_CRUSHER_MAX_CURRENT								2.0 // A
-#define FSM_CRUSHER_MIN_CURRENT								1.5 // A
+#define FSM_CRUSHER_MAX_WEIGHT_CONVOY						100 // 100 kG
+#define FSM_CRUSHER_MAX_CURRENT								80.0 // A
+#define FSM_CRUSHER_MIN_CURRENT								15.0 // A
 #define FSM_CRUSHER_MAX_COUNT_NO_PLASTIC					120
-#define FSM_CRUSHER_MAX_PERIODIC_REVERSE_COUNT				25
+#define FSM_CRUSHER_MAX_PERIODIC_REVERSE_COUNT				50
 
 
 static int stateFsmCrusher = FSM_CRUSHER_IDLE_STATE; //IDLE
@@ -83,7 +83,7 @@ int updateCrusherFSM(void)
 
 		case FSM_CRUSHER_OPEN100_STATE:
 			// open distributor gate to 50%
-			setPosition(POLOLU_DISTRIBUTOR_MOTOR, DISTRIBUTOR_MOTOR_OPEN);
+			openDitributorGateFSMCrusher();
 			stateFsmCrusher = FSM_CRUSHER_WAIT_FOR_WEIGHT_STATE;
 			break;
 
@@ -148,7 +148,7 @@ int updateCrusherFSM(void)
 			{
 				// stop crusher motor and wait a bit
 				setCrusherFsmState("Vidage du convoyeur");
-				stopCrusherMotor();
+				stopCrusherMotor(CRUSHER_FWD_SPEED);
 
 				// empty convoy into distributor
 				setPosition(POLOLU_CONVOY_MOTOR, CONVOY_MOTOR_FWD);
@@ -173,7 +173,8 @@ int updateCrusherFSM(void)
 		case FSM_CRUSHER_END_STATE:
 			// stop all
 			homing();
-			stopCrusherMotor();
+			closeDitributorGateFSMCrusher();
+			stopCrusherMotor(CRUSHER_FWD_SPEED);
 			fsmStarted = 0;
 			returnValue = 1;
 			stateFsmCrusher = FSM_CRUSHER_IDLE_STATE;
@@ -182,7 +183,8 @@ int updateCrusherFSM(void)
 		case FSM_CRUSHER_END_STATE_WITH_ERROR:
 			// stop all
 			homing();
-			stopCrusherMotor();
+			closeDitributorGateFSMCrusher();
+			stopCrusherMotor(CRUSHER_FWD_SPEED);
 			fsmStarted = 0;
 			returnValue = 2; // error
 			stateFsmCrusher = FSM_CRUSHER_IDLE_STATE;
@@ -202,16 +204,14 @@ void bourrageRoutineCrusherFSM()
 	countPeriodicReverse = 1;
 	mainFsmStatus->crusherIsBlocked = 1;
 	// stop motor and sleep 1 seconds
-	stopCrusherMotor();
-	sleep(1);
+	stopCrusherMotor(CRUSHER_FWD_SPEED);
 
 	// rotate motor in other direction (not at max speed
 	reverseCrusherMotor(CRUSHER_BWD_SPEED);
 	sleep(5);
 
 	// stop motor
-	stopCrusherMotor();
-	sleep(1);
+	stopCrusherMotor(CRUSHER_BWD_SPEED);
 
 	// start motor with slope
 	startCrusherMotor(CRUSHER_FWD_SPEED);
@@ -223,14 +223,14 @@ void periodicReverseCrusherFSM()
 	setCrusherFsmState("Inversion périodique du déchiqueteur");
 
 	// stop crusher and run it in BWD direction
-	stopCrusherMotor();
+	stopCrusherMotor(CRUSHER_FWD_SPEED);
 	reverseCrusherMotor(CRUSHER_BWD_SPEED);
 
 	// wait for 5 seconds
 	sleep(5);
 
 	// stop crusher again
-	stopCrusherMotor();
+	stopCrusherMotor(CRUSHER_BWD_SPEED);
 	startCrusherMotor(CRUSHER_FWD_SPEED);
 }
 
@@ -239,5 +239,19 @@ void setCrusherFsmState(char* strValue)
 	memset(mainFsmStatus->fsmCrusherStatus, 0, 50);
 	memcpy(mainFsmStatus->fsmCrusherStatus, strValue, strlen(strValue));
 }
+
+void openDitributorGateFSMCrusher()
+{
+	setPosition(POLOLU_DISTRIBUTOR_MOTOR, DISTRIBUTOR_MOTOR_OPEN);
+	setPosition(POLOLU_DISTRIBUTOR_MOTOR_INV, DISTRIBUTOR_MOTOR_CLOSE);
+
+}
+
+void closeDitributorGateFSMCrusher()
+{
+	setPosition(POLOLU_DISTRIBUTOR_MOTOR, DISTRIBUTOR_MOTOR_CLOSE);
+	setPosition(POLOLU_DISTRIBUTOR_MOTOR_INV, DISTRIBUTOR_MOTOR_OPEN);
+}
+
 
 

@@ -10,7 +10,7 @@
 
 
 void initCrusherMotor(void);
-void stopCrusherMotor(void);
+void stopCrusherMotor(int);
 void startCrusherMotor(int);
 void reverseCrusherMotor(int);
 

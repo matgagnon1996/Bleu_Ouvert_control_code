@@ -12,7 +12,6 @@ double calculateActionToApply(double);
 void setTemperatureCommand(void);
 double getTemperatureCommand(void);
 void clearTemperatureCommand(void);
-double voltageToDutyCycle(double);
 
 
 #endif /* ASSERVISSEMENTTEMPERATURE_H_ */

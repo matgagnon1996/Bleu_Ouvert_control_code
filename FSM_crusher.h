@@ -15,6 +15,8 @@ void stopCrusherFSM(void);
 void setCrusherFsmState(char* strValue);
 void bourrageRoutineCrusherFSM(void);
 void periodicReverseCrusherFSM(void);
+void openDitributorGateFSMCrusher(void);
+void closeDitributorGateFSMCrusher(void);
 
 
 

@@ -55,7 +55,7 @@
 #define ADS1115_OFFSET_CRUSHER					-18.611 //b
 
 #define ADS1115_SLOPE_EXTRUDER					11.111 //m
-#define ADS1115_OFFSET_EXTRUDER					-25.025 // b
+#define ADS1115_OFFSET_EXTRUDER					-29.8217 // b
 
 /*
  * Init ads in default mode
@@ -152,7 +152,7 @@ double readChannelValueADS1115(int channel)
  */
 double voltageToCurrentCrusher(double v)
 {
-	return (double)(v*(double)(ADS1115_SLOPE_CRUSHER) + (double)(ADS1115_OFFSET_CRUSHER));
+	return (double)(-1.0)*(double)(v*(double)(ADS1115_SLOPE_CRUSHER) + (double)(ADS1115_OFFSET_CRUSHER));
 }
 
 /*

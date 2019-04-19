@@ -53,7 +53,7 @@ void readTemperatureSPI(char* readValue, size_t n)
 	pthread_mutex_unlock(&mutexSPI);
 }
 
-void setPotentiometerValueSPI(int value)
+void setPotentiometerValueSPI(uint8_t value)
 {
 	// lock mutex
 	pthread_mutex_lock(&mutexSPI);
@@ -62,6 +62,7 @@ void setPotentiometerValueSPI(int value)
 	bcm2835_spi_chipSelect(BCM2835_SPI_CS1);
 
 	// TODO : transert according to datasheet
+	bcm2835_spi_transfer(value);
 
 	// unlock mutex
 	pthread_mutex_unlock(&mutexSPI);
