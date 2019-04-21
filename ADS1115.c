@@ -152,7 +152,7 @@ double readChannelValueADS1115(int channel)
  */
 double voltageToCurrentCrusher(double v)
 {
-	return (double)(-1.0)*(double)(v*(double)(ADS1115_SLOPE_CRUSHER) + (double)(ADS1115_OFFSET_CRUSHER));
+	return (double)(v*(double)(ADS1115_SLOPE_CRUSHER) + (double)(ADS1115_OFFSET_CRUSHER));
 }
 
 /*

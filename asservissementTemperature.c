@@ -9,8 +9,8 @@
 #include "FSM_main.h"
 #include "stdio.h"
 
-#define COEFFICIANT1 			0.07181//0.5128//
-#define COEFFICIANT2			-0.07179//-0.5111//
+#define COEFFICIANT1 			0.07075//0.07181
+#define COEFFICIANT2			-0.07065//-0.07179
 
 #define MIN_DUTY_CYCLE				0.00
 #define MAX_DUTY_CYCLE				1.00
@@ -26,15 +26,10 @@ double calculateActionToApply(double actualTemp)
 	tabErreur[1] = tabErreur[0];
 	tabErreur[0] = command - actualTemp;
 
-	//printf("Erreur : %f \n", tabErreur[0]);
 
 	// calculate new action
 	tabAction[1] = tabAction[0];
 	tabAction[0] = COEFFICIANT1*tabErreur[0] + COEFFICIANT2*tabErreur[1] + tabAction[1];
-
-	//printf("Erreur actuelle : %f \n", tabErreur[0]);
-	//printf("Erreur précédentes : %f \n", tabErreur[1]);
-	//printf("Action calculé : %f \n", tabAction[0]);
 
 	// check if we saturate
 	if(tabAction[0] > MAX_DUTY_CYCLE)

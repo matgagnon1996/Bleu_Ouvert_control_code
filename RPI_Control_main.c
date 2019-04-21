@@ -211,7 +211,7 @@ void *statusThreadFunction(void* param)
 		unsigned int weight = getRawDataMean(hx711Sruct,10);
 		double poidsG = voltageToWeight(weight);
 		sprintf(valueToSend, "%.5g", poidsG);
-		printf("Poids count: %u \n", weight);
+		//printf("Poids count: %u \n", weight);
 		printf("Poids  grams : %f \n", poidsG);
 		mainFsmStatus->convoyWeight = poidsG;
 		sendMessage(socketFd,(char*)( &valueToSend), strlen(valueToSend), STS_WEIGHT_MSG, RPI_CONTROL_ID);
@@ -292,15 +292,15 @@ void *commandThreadFunction(void* param)
 
 					if(((t_pololu_cmd*)message)->channel == 3)
 					{
-						printf("j'arrête le moteur");
+						printf("je stoppe le moteur \n");
+						//setPosition(((t_pololu_cmd*)message)->channel, ((t_pololu_cmd*)message)->value);
 						stopCrusherMotor(20);
-						printf("J'ai finis d'arrêter le moteur");
 					}
 					else
 					{
-						printf("Je démarrer le moteur");
+						printf("Je démarre le moteur \n");
+						//setPosition(((t_pololu_cmd*)message)->channel, ((t_pololu_cmd*)message)->value);
 						startCrusherMotor(20);
-						printf("J'ai finis de démarrer le moteur");
 					}
 					printf("allo \n");
 				}

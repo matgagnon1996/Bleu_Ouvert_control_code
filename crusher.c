@@ -46,7 +46,6 @@ void stopCrusherMotor(int fromSpeed)
 	int i = 0;
 	for(i = fromSpeed; i >= 0 ; i-=CRUSHER_SPEED_INCREMENT)
 	{
-		printf("decrease speed \n");
 		// set pot value to decrease speed
 		uint8_t potValue = ((int)(((double)(i)/ (double)(100.0))*255));//*((double)(1.0) / (double)(10.0));
 		setPotentiometerValueSPI(potValue);
@@ -74,7 +73,6 @@ void startCrusherMotor(int speed)
 	int i = 0;
 	for(i = 0; i <= speed ; i+=CRUSHER_SPEED_INCREMENT)
 	{
-		printf("increse speed \n");
 		// set pot value to decrease speed
 		uint8_t potValue = ((int)(((double)(i)/ (double)(100.0))*255));//*((double)(1.0) / (double)(10.0));
 		setPotentiometerValueSPI(potValue);

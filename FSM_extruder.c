@@ -22,10 +22,10 @@
 #define FSM_EXTRUDER_OPEN50_STATE							4
 #define FSM_EXTRUDER_OPEN100_STATE							5
 #define FSM_EXTRUDER_WAIT_FOR_WEIGHT_STATE					6
-#define FSM_EXTRUDER_EMPTY_CONVOY_STATE						7
 #define FSM_EXTRUDER_END_STATE								8
 #define FSM_EXTRUDER_END_STATE_WITH_ERROR					9
 #define FSM_EXTUDER_EMPTY_CONVOY_TO_GARBAGE_STATE			10
+#define FSM_EXTRUDER_END_STATE_FROM_SPEED					11
 
 #define FSM_EXTRUDER_TERMINATED_OK							1
 #define FSM_EXTRUDER_TERMINATED_ERROR						2
@@ -38,12 +38,11 @@
 #define FSM_EXTRUDER_MIN_EXTRUDER_CURRENT					0.45 // A
 #define FSM_EXTRUDER_MAX_COUNT_NO_PLASTIC					120
 #define FSM_EXTRUDER_TEMP_PRECISION							1.0
-#define FSM_EXTRUDER_MAX_PERIODIC_REVERSE_COUNT				50
+#define FSM_EXTRUDER_MAX_PERIODIC_REVERSE_COUNT				250
 
 static int stateFsmExtruder = FSM_EXTRUDER_IDLE_STATE; //IDLE
 static int returnValue = 0;
 static double totalWeight = 0.0;
-static int countNoPlastic = 0;
 static int countPeriodicReverse = 0;
 
 // start fsm or not
@@ -67,7 +66,6 @@ int updateExtruderFSM(void)
 			// wait for fsm started
 			returnValue = 0;
 			totalWeight = 0.0;
-			countNoPlastic = 0;
 			countPeriodicReverse = 0;
 			setExtruderFsmState("En attente");
 
@@ -132,6 +130,7 @@ int updateExtruderFSM(void)
 		case FSM_EXTRUDER_WAIT_FOR_WEIGHT_STATE:
 			if(fsmStarted == 1)
 			{
+				setPosition(POLOLU_CONVOY_MOTOR, CONVOY_MOTOR_BWD);
 				countPeriodicReverse++;
 				// read weight
 				setExtruderFsmState("remplissage du convoyeur");
@@ -143,37 +142,11 @@ int updateExtruderFSM(void)
 					bourrageRoutineExtruderFSM();
 				}
 
-				// check if there is enough plastic
-				if(mainFsmStatus->crusherCurrent < FSM_EXTRUDER_MIN_CRUSHER_CURRENT)
-				{
-					// il y aurait possibilité de ne plus avoir de plastique!
-					countNoPlastic++;
-					if(countNoPlastic >= FSM_EXTRUDER_MAX_COUNT_NO_PLASTIC)
-					{
-						// il faut arrêter car on n'a plus de plastique
-						stateFsmExtruder = FSM_EXTRUDER_END_STATE_WITH_ERROR;
-						break;
-					}
-				}else
-				{
-					// Il ne manque pas de plastique
-					countNoPlastic = 0;
-				}
-
 				// check if mold is full
 				if(mainFsmStatus->extruderCurrent > FSM_EXTRUDER_MAX_EXTRUDER_CURRENT)
 				{
 					// mold is full
 					stateFsmExtruder = FSM_EXTUDER_EMPTY_CONVOY_TO_GARBAGE_STATE;
-					break;
-				}
-
-				// check for requested weight
-				if(mainFsmStatus->convoyWeight > FSM_EXTRUDER_MAX_WEIGHT_CONVOY)
-				{
-					// max weight on convoy
-					totalWeight += mainFsmStatus->convoyWeight;
-					stateFsmExtruder = FSM_EXTRUDER_EMPTY_CONVOY_STATE;
 					break;
 				}
 
@@ -188,33 +161,18 @@ int updateExtruderFSM(void)
 				break;
 			}else
 			{
-				stateFsmExtruder = FSM_EXTRUDER_END_STATE;
+				stateFsmExtruder = FSM_EXTRUDER_END_STATE_FROM_SPEED;
 				break;
 			}
 
-		case FSM_EXTRUDER_EMPTY_CONVOY_STATE:
-			if(fsmStarted == 1)
-			{
-				// stop crusher motor and wait a bit
-				setExtruderFsmState("Envoie à l'extrudeur");
-				stopCrusherMotor(CRUSHER_FWD_SPEED);
-
-				// empty convoy into distributor
-				setPosition(POLOLU_CONVOY_MOTOR, CONVOY_MOTOR_BWD);
-				sleep(5);
-				setPosition(POLOLU_CONVOY_MOTOR, CONVOY_MOTOR_STOP);
-
-				// restart motor
-				startCrusherMotor(CRUSHER_FWD_SPEED);
-
-				// return to wait for mold
-				stateFsmExtruder = FSM_EXTRUDER_WAIT_FOR_WEIGHT_STATE;
-				break;
-			}else
-			{
-				stateFsmExtruder = FSM_EXTRUDER_END_STATE;
-				break;
-			}
+		case FSM_EXTRUDER_END_STATE_FROM_SPEED:
+			setExtruderFsmState("Arrêt du système");
+			closeDitributorGateFSMExtruder();
+			stopCrusherMotor(CRUSHER_FWD_SPEED);
+			fsmStarted = 0;
+			returnValue = 0;
+			stateFsmExtruder = FSM_EXTRUDER_IDLE_STATE;
+			break;
 
 		case FSM_EXTUDER_EMPTY_CONVOY_TO_GARBAGE_STATE:
 			// stop crusher motor and wait a bit
@@ -222,7 +180,7 @@ int updateExtruderFSM(void)
 			stopCrusherMotor(CRUSHER_FWD_SPEED);
 
 			// empty convoy into distributor
-			setPosition(POLOLU_CONVOY_MOTOR, CONVOY_MOTOR_FWD);
+			setPosition(POLOLU_CONVOY_MOTOR, CONVOY_MOTOR_BWD);
 			sleep(5);
 			setPosition(POLOLU_CONVOY_MOTOR, CONVOY_MOTOR_STOP);
 
@@ -231,9 +189,9 @@ int updateExtruderFSM(void)
 
 		case FSM_EXTRUDER_END_STATE:
 			// stop all
-			homing();
+			setExtruderFsmState("Arrêt du système");
 			closeDitributorGateFSMExtruder();
-			stopCrusherMotor(CRUSHER_FWD_SPEED);
+			stopCrusherMotor(0);
 			fsmStarted = 0;
 			returnValue = 1;
 			stateFsmExtruder = FSM_EXTRUDER_IDLE_STATE;
@@ -241,7 +199,7 @@ int updateExtruderFSM(void)
 
 		case FSM_EXTRUDER_END_STATE_WITH_ERROR:
 			// stop all
-			homing();
+			setExtruderFsmState("Erreur du système");
 			closeDitributorGateFSMExtruder();
 			stopCrusherMotor(CRUSHER_FWD_SPEED);
 			fsmStarted = 0;
@@ -285,14 +243,13 @@ void setExtruderFsmState(char* strValue)
 
 void periodicReverseExtruderFSM()
 {
-	setExtruderFsmState("Inversion périodique du déchiqueteur");
-
+	setExtruderFsmState("Inversion périodique");
 	// stop crusher and run it in BWD direction
 	stopCrusherMotor(CRUSHER_FWD_SPEED);
 	reverseCrusherMotor(CRUSHER_BWD_SPEED);
 
 	// wait for 5 seconds
-	sleep(5);
+	sleep(2);
 
 	// stop crusher again
 	stopCrusherMotor(CRUSHER_BWD_SPEED);
@@ -301,13 +258,13 @@ void periodicReverseExtruderFSM()
 
 void openDitributorGateFSMExtruder()
 {
-	setPosition(POLOLU_DISTRIBUTOR_MOTOR, DISTRIBUTOR_MOTOR_OPEN);
-	setPosition(POLOLU_DISTRIBUTOR_MOTOR_INV, DISTRIBUTOR_MOTOR_CLOSE);
+	setPosition(POLOLU_DISTRIBUTOR_MOTOR, DISTRIBUTOR_MOTOR_CLOSE);
+	setPosition(POLOLU_DISTRIBUTOR_MOTOR_INV, DISTRIBUTOR_MOTOR_OPEN);
 
 }
 
 void closeDitributorGateFSMExtruder()
 {
-	setPosition(POLOLU_DISTRIBUTOR_MOTOR, DISTRIBUTOR_MOTOR_CLOSE);
-	setPosition(POLOLU_DISTRIBUTOR_MOTOR_INV, DISTRIBUTOR_MOTOR_OPEN);
+	setPosition(POLOLU_DISTRIBUTOR_MOTOR, DISTRIBUTOR_MOTOR_OPEN);
+	setPosition(POLOLU_DISTRIBUTOR_MOTOR_INV, DISTRIBUTOR_MOTOR_CLOSE);
 }

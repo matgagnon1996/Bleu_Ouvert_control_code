@@ -21,13 +21,14 @@
 #define FSM_CRUSHER_EMPTY_CONVOY_STATE						5
 #define FSM_CRUSHER_END_STATE								6
 #define FSM_CRUSHER_END_STATE_WITH_ERROR					7
+#define FSM_CRUSHER_END_STATE_FROM_SPEED					8
 
 #define FSM_CRUSHER_TERMINATED_OK							1
 #define FSM_CRUSHER_TERMINATED_ERROR						2
 
 #define FSM_CRUSHER_MOTOR_INCREMENT							100
-#define FSM_CRUSHER_MAX_WEIGHT_CONVOY						100 // 100 kG
-#define FSM_CRUSHER_MAX_CURRENT								80.0 // A
+#define FSM_CRUSHER_MAX_WEIGHT_CONVOY						500 // 100 kG
+#define FSM_CRUSHER_MAX_CURRENT								100 // A
 #define FSM_CRUSHER_MIN_CURRENT								15.0 // A
 #define FSM_CRUSHER_MAX_COUNT_NO_PLASTIC					120
 #define FSM_CRUSHER_MAX_PERIODIC_REVERSE_COUNT				50
@@ -36,7 +37,6 @@
 static int stateFsmCrusher = FSM_CRUSHER_IDLE_STATE; //IDLE
 static int returnValue = 0;
 static double totalWeight = 0.0;
-static int countNoPlastic = 0;
 static int countPeriodicReverse = 0; // reverse when count == 10
 
 // start fsm or not
@@ -60,7 +60,6 @@ int updateCrusherFSM(void)
 			// wait for fsm started
 			returnValue = 0;
 			totalWeight = 0.0;
-			countNoPlastic = 0;
 			countPeriodicReverse = 0;
 			setCrusherFsmState("En attente");
 
@@ -77,6 +76,9 @@ int updateCrusherFSM(void)
 		case FSM_CRUSHER_START_CRUSHER_STATE:
 			// apply graduate input to motor
 			setCrusherFsmState("Démarrage du moteur");
+			reverseCrusherMotor(CRUSHER_BWD_SPEED);
+			sleep(5);
+			stopCrusherMotor(CRUSHER_BWD_SPEED);
 			startCrusherMotor(CRUSHER_FWD_SPEED);
 			stateFsmCrusher = FSM_CRUSHER_OPEN100_STATE;
 			break;
@@ -100,48 +102,34 @@ int updateCrusherFSM(void)
 					// il y a une blocage!
 					bourrageRoutineCrusherFSM();
 				}
-
-				// check if there plasi
-				if(mainFsmStatus->crusherCurrent < FSM_CRUSHER_MIN_CURRENT)
-				{
-					// il y aurait possibilité de ne plus avoir de plastique!
-					countNoPlastic++;
-					if(countNoPlastic >= FSM_CRUSHER_MAX_COUNT_NO_PLASTIC)
-					{
-						// il faut arrêter car on n'a plus de plastique
-						stateFsmCrusher = FSM_CRUSHER_END_STATE_WITH_ERROR;
-						break;
-					}
-				}else
-				{
-					// Il ne manque pas de plastique
-					countNoPlastic = 0;
-				}
-
-				// check for requested weight
-				if(mainFsmStatus->convoyWeight > FSM_CRUSHER_MAX_WEIGHT_CONVOY || (totalWeight + mainFsmStatus->convoyWeight) > mainFsmStatus->requestedWeight)
-				{
-					// max weight on convoy
-					totalWeight += mainFsmStatus->convoyWeight;
-					stateFsmCrusher = FSM_CRUSHER_EMPTY_CONVOY_STATE;
-					break;
-				}
-
 				// check if we have to do a periodic reverse
 				if(countPeriodicReverse % FSM_CRUSHER_MAX_PERIODIC_REVERSE_COUNT == 0)
 				{
 					// do a periodic reverse
 					periodicReverseCrusherFSM();
+
+					// check for weight
+					if(mainFsmStatus->convoyWeight > FSM_CRUSHER_MAX_WEIGHT_CONVOY || (totalWeight + mainFsmStatus->convoyWeight) > mainFsmStatus->requestedWeight)
+					{
+						// start crusher anyway
+						totalWeight += mainFsmStatus->convoyWeight;
+						stateFsmCrusher = FSM_CRUSHER_EMPTY_CONVOY_STATE;
+						startCrusherMotor(CRUSHER_FWD_SPEED);
+						break;
+					}
+
+					// restart motor if command is not ok
+					startCrusherMotor(CRUSHER_FWD_SPEED);
+
 				}
 
 				stateFsmCrusher = FSM_CRUSHER_WAIT_FOR_WEIGHT_STATE;
 				break;
 			}else
 			{
-				stateFsmCrusher = FSM_CRUSHER_END_STATE;
+				stateFsmCrusher = FSM_CRUSHER_EMPTY_CONVOY_STATE;
 				break;
 			}
-
 
 		case FSM_CRUSHER_EMPTY_CONVOY_STATE:
 			if(fsmStarted == 1)
@@ -152,16 +140,19 @@ int updateCrusherFSM(void)
 
 				// empty convoy into distributor
 				setPosition(POLOLU_CONVOY_MOTOR, CONVOY_MOTOR_FWD);
-				sleep(5);
+				sleep(30);
 				setPosition(POLOLU_CONVOY_MOTOR, CONVOY_MOTOR_STOP);
 
 				//restart motor and wait for weight
 				if(totalWeight >= mainFsmStatus->requestedWeight)
 				{
 					stateFsmCrusher = FSM_CRUSHER_END_STATE;
+				break;
 				}else
 				{
-					stateFsmCrusher = FSM_CRUSHER_START_CRUSHER_STATE;
+					// restarts crusher dans wait for weight
+					startCrusherMotor(CRUSHER_FWD_SPEED);
+					stateFsmCrusher = FSM_CRUSHER_WAIT_FOR_WEIGHT_STATE;
 				}
 				break;
 			}else
@@ -170,11 +161,21 @@ int updateCrusherFSM(void)
 				break;
 			}
 
-		case FSM_CRUSHER_END_STATE:
-			// stop all
-			homing();
+
+		case FSM_CRUSHER_END_STATE_FROM_SPEED:
+			setCrusherFsmState("Arrêt du système");
 			closeDitributorGateFSMCrusher();
 			stopCrusherMotor(CRUSHER_FWD_SPEED);
+			fsmStarted = 0;
+			returnValue = 0;
+			stateFsmCrusher = FSM_CRUSHER_IDLE_STATE;
+			break;
+
+		case FSM_CRUSHER_END_STATE:
+			// stop all
+			setCrusherFsmState("Arrêt du système");
+			closeDitributorGateFSMCrusher();
+			stopCrusherMotor(0);
 			fsmStarted = 0;
 			returnValue = 1;
 			stateFsmCrusher = FSM_CRUSHER_IDLE_STATE;
@@ -182,7 +183,7 @@ int updateCrusherFSM(void)
 
 		case FSM_CRUSHER_END_STATE_WITH_ERROR:
 			// stop all
-			homing();
+			setCrusherFsmState("Erreur du système");
 			closeDitributorGateFSMCrusher();
 			stopCrusherMotor(CRUSHER_FWD_SPEED);
 			fsmStarted = 0;
@@ -220,18 +221,19 @@ void bourrageRoutineCrusherFSM()
 
 void periodicReverseCrusherFSM()
 {
-	setCrusherFsmState("Inversion périodique du déchiqueteur");
-
+	setCrusherFsmState("Inversion périodique");
 	// stop crusher and run it in BWD direction
 	stopCrusherMotor(CRUSHER_FWD_SPEED);
 	reverseCrusherMotor(CRUSHER_BWD_SPEED);
 
 	// wait for 5 seconds
-	sleep(5);
+	sleep(2);
 
 	// stop crusher again
 	stopCrusherMotor(CRUSHER_BWD_SPEED);
-	startCrusherMotor(CRUSHER_FWD_SPEED);
+
+	// wait for 2 second
+	sleep(2);
 }
 
 void setCrusherFsmState(char* strValue)
@@ -242,15 +244,15 @@ void setCrusherFsmState(char* strValue)
 
 void openDitributorGateFSMCrusher()
 {
-	setPosition(POLOLU_DISTRIBUTOR_MOTOR, DISTRIBUTOR_MOTOR_OPEN);
-	setPosition(POLOLU_DISTRIBUTOR_MOTOR_INV, DISTRIBUTOR_MOTOR_CLOSE);
+	setPosition(POLOLU_DISTRIBUTOR_MOTOR, DISTRIBUTOR_MOTOR_CLOSE);
+	setPosition(POLOLU_DISTRIBUTOR_MOTOR_INV, DISTRIBUTOR_MOTOR_OPEN);
 
 }
 
 void closeDitributorGateFSMCrusher()
 {
-	setPosition(POLOLU_DISTRIBUTOR_MOTOR, DISTRIBUTOR_MOTOR_CLOSE);
-	setPosition(POLOLU_DISTRIBUTOR_MOTOR_INV, DISTRIBUTOR_MOTOR_OPEN);
+	setPosition(POLOLU_DISTRIBUTOR_MOTOR, DISTRIBUTOR_MOTOR_OPEN);
+	setPosition(POLOLU_DISTRIBUTOR_MOTOR_INV, DISTRIBUTOR_MOTOR_CLOSE);
 }
 
 
