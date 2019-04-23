@@ -26,7 +26,8 @@ double calculateActionToApply(double actualTemp)
 	tabErreur[1] = tabErreur[0];
 	tabErreur[0] = command - actualTemp;
 
-
+	printf("error : %f \n", tabErreur[0]);
+	printf("Command : %f \n ", command);
 	// calculate new action
 	tabAction[1] = tabAction[0];
 	tabAction[0] = COEFFICIANT1*tabErreur[0] + COEFFICIANT2*tabErreur[1] + tabAction[1];

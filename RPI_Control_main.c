@@ -112,6 +112,7 @@ int main(int argc, const char* argv[])
 
 	setupGPIO(hx711Sruct);
 	reset(hx711Sruct);
+	zeroScale(hx711Sruct);
 #endif //_SCALE_CONNECTED
 
 #endif //_CONNECTED
@@ -214,7 +215,10 @@ void *statusThreadFunction(void* param)
 		//printf("Poids count: %u \n", weight);
 		printf("Poids  grams : %f \n", poidsG);
 		mainFsmStatus->convoyWeight = poidsG;
-		sendMessage(socketFd,(char*)( &valueToSend), strlen(valueToSend), STS_WEIGHT_MSG, RPI_CONTROL_ID);
+		if(poidsG >= 0.0)
+		{
+			sendMessage(socketFd,(char*)( &valueToSend), strlen(valueToSend), STS_WEIGHT_MSG, RPI_CONTROL_ID);
+		}
 #endif //_SCALE_CONNECTED
 
 		// send status to interface
@@ -311,6 +315,7 @@ void *commandThreadFunction(void* param)
 
 			case CRUSHER_MODE_CMD:
 				// get weight
+				zeroScale(hx711Sruct);
 				mainFsmStatus->requestedWeight = atof(message);
 				printf("Poids demandé : %f\n", mainFsmStatus->requestedWeight);
 				mainFsmStatus->fsmRequestedMode = FSM_CRUSHER_MODE;
@@ -321,7 +326,11 @@ void *commandThreadFunction(void* param)
 
 			case EXTRUDER_MODE_CMD:
 				//begin extruder mode
+				printf("Allo je vais démarrer le mode extrudeur \n");
 				mainFsmStatus->requestedTemperature = atof(message);
+				setTemperatureCommand();
+				mainFsmStatus->enslavementStarted = 1;
+				mainFsmStatus->fsmRequestedMode = FSM_EXTRUDER_MODE;
 				startExtruderFSM();
 
 				break;

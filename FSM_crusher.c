@@ -36,7 +36,6 @@
 
 static int stateFsmCrusher = FSM_CRUSHER_IDLE_STATE; //IDLE
 static int returnValue = 0;
-static double totalWeight = 0.0;
 static int countPeriodicReverse = 0; // reverse when count == 10
 
 // start fsm or not
@@ -59,7 +58,6 @@ int updateCrusherFSM(void)
 		case FSM_CRUSHER_IDLE_STATE:
 			// wait for fsm started
 			returnValue = 0;
-			totalWeight = 0.0;
 			countPeriodicReverse = 0;
 			setCrusherFsmState("En attente");
 
@@ -109,10 +107,9 @@ int updateCrusherFSM(void)
 					periodicReverseCrusherFSM();
 
 					// check for weight
-					if(mainFsmStatus->convoyWeight > FSM_CRUSHER_MAX_WEIGHT_CONVOY || (totalWeight + mainFsmStatus->convoyWeight) > mainFsmStatus->requestedWeight)
+					if(mainFsmStatus->convoyWeight > mainFsmStatus->requestedWeight)
 					{
 						// start crusher anyway
-						totalWeight += mainFsmStatus->convoyWeight;
 						stateFsmCrusher = FSM_CRUSHER_EMPTY_CONVOY_STATE;
 						startCrusherMotor(CRUSHER_FWD_SPEED);
 						break;
@@ -132,35 +129,18 @@ int updateCrusherFSM(void)
 			}
 
 		case FSM_CRUSHER_EMPTY_CONVOY_STATE:
-			if(fsmStarted == 1)
-			{
-				// stop crusher motor and wait a bit
-				setCrusherFsmState("Vidage du convoyeur");
-				stopCrusherMotor(CRUSHER_FWD_SPEED);
+			// stop crusher motor and wait a bit
+			setCrusherFsmState("Vidage du convoyeur");
+			stopCrusherMotor(CRUSHER_FWD_SPEED);
 
-				// empty convoy into distributor
-				setPosition(POLOLU_CONVOY_MOTOR, CONVOY_MOTOR_FWD);
-				sleep(30);
-				setPosition(POLOLU_CONVOY_MOTOR, CONVOY_MOTOR_STOP);
+			// empty convoy into distributor
+			setPosition(POLOLU_CONVOY_MOTOR, CONVOY_MOTOR_FWD);
+			sleep(30);
+			setPosition(POLOLU_CONVOY_MOTOR, CONVOY_MOTOR_STOP);
 
-				//restart motor and wait for weight
-				if(totalWeight >= mainFsmStatus->requestedWeight)
-				{
-					stateFsmCrusher = FSM_CRUSHER_END_STATE;
-				break;
-				}else
-				{
-					// restarts crusher dans wait for weight
-					startCrusherMotor(CRUSHER_FWD_SPEED);
-					stateFsmCrusher = FSM_CRUSHER_WAIT_FOR_WEIGHT_STATE;
-				}
-				break;
-			}else
-			{
-				stateFsmCrusher = FSM_CRUSHER_END_STATE;
-				break;
-			}
-
+			//Stop system
+			stateFsmCrusher = FSM_CRUSHER_END_STATE;
+			break;
 
 		case FSM_CRUSHER_END_STATE_FROM_SPEED:
 			setCrusherFsmState("Arrêt du système");

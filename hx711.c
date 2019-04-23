@@ -1,7 +1,11 @@
 #include "hx711.h"
+#include "pthread.h"
 
 #define HX711_SLOPE  0.176136363
-#define HX711_OFFSET -47947.00548//-55957.00548
+//#define HX711_OFFSET -47947.00548//-55957.00548
+
+static double HX711_OFFSET = -44947.00548;
+static pthread_mutex_t mutex_scale;
 
 int setupGPIO(HX711 *hx)
 {
@@ -185,33 +189,29 @@ int initHX711(HX711 *hx, unsigned char clock_pin, unsigned char data_pin)
   hx->scale_ratio_A_64 = 0.0;
   hx->scale_ratio_B = 0.0;
   hx->filterPtr = NULL;
+
+  // init mutex
+  pthread_mutex_init(&mutex_scale, NULL);
+
   return 0;
 }
 
+// zero scale according to actual weight on scale
 int zeroScale(HX711 *hx)
 {
-  double result = getRawDataMean(hx, 160);
-  if (hx->current_channel == 'A' && hx->gain_channel_A == 128)
-  {
-    hx->offset_A_128 = result;
-    return 0;
-  }
-  else if (hx->current_channel == 'A' && hx->gain_channel_A == 64)
-  {
-    hx->offset_A_64 = result;
-    return 0;
-  }
-  else if (hx->current_channel == 'B')
-  {
-    hx->offset_B = result;
-    return 0;
-  }
-  printf("\n\n!!!zeroScale - current channel is wrong: %c\n", hx->current_channel);
-  return 1;
+
+  double result = getRawDataMean(hx, 5);
+
+
+  HX711_OFFSET -= voltageToWeight(result);
+
+  return 0;
 }
 
 int getRawDataMean(HX711 *hx, int samples)
 {
+	pthread_mutex_lock(&mutex_scale);
+
 	int *data;
 	data = malloc(samples * sizeof(int));
 
@@ -227,6 +227,9 @@ int getRawDataMean(HX711 *hx, int samples)
 	{
 		sum += data[i];
 	}
+
+	pthread_mutex_unlock(&mutex_scale);
+
 	free(data);
 	return (int)(sum / samples);
 }
@@ -273,5 +276,9 @@ int getWeightMean(HX711 *hx, int samples)
 
 double voltageToWeight(double weight)
 {
-	return ((double)(weight))*HX711_SLOPE + HX711_OFFSET;
+	pthread_mutex_lock(&mutex_scale);
+	double returnValue = ((double)(weight))*HX711_SLOPE + HX711_OFFSET;
+	pthread_mutex_unlock(&mutex_scale);
+
+	return returnValue;
 }

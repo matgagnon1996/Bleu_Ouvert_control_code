@@ -34,10 +34,10 @@
 #define FSM_EXTRUDER_MAX_WEIGHT_CONVOY						100 // 100 G
 #define FSM_EXTRUDER_MAX_CRUSHER_CURRENT					80.0 // A
 #define FSM_EXTRUDER_MIN_CRUSHER_CURRENT					15.0 // A
-#define FSM_EXTRUDER_MAX_EXTRUDER_CURRENT					0.7 // A
+#define FSM_EXTRUDER_MAX_EXTRUDER_CURRENT					5.0 // A
 #define FSM_EXTRUDER_MIN_EXTRUDER_CURRENT					0.45 // A
 #define FSM_EXTRUDER_MAX_COUNT_NO_PLASTIC					120
-#define FSM_EXTRUDER_TEMP_PRECISION							1.0
+#define FSM_EXTRUDER_TEMP_PRECISION							5.0 // %
 #define FSM_EXTRUDER_MAX_PERIODIC_REVERSE_COUNT				250
 
 static int stateFsmExtruder = FSM_EXTRUDER_IDLE_STATE; //IDLE
@@ -71,25 +71,12 @@ int updateExtruderFSM(void)
 
 			if(fsmStarted == 1)
 			{
-				stateFsmExtruder = FSM_EXTRUDER_START_HEATER;
+				stateFsmExtruder = FSM_EXTRUDER_WAIT_FOR_HEATER_STATE;
 			}else
 			{
 				stateFsmExtruder = FSM_EXTRUDER_IDLE_STATE;
 			}
 
-			break;
-
-		case FSM_EXTRUDER_START_HEATER:
-			if(mainFsmStatus->enslavementStarted == 1)
-			{
-				// wait for heater
-				stateFsmExtruder = FSM_EXTRUDER_WAIT_FOR_HEATER_STATE;
-			}else
-			{
-				//start enslavement and wait
-				mainFsmStatus->enslavementStarted = 1;
-				stateFsmExtruder = FSM_EXTRUDER_WAIT_FOR_HEATER_STATE;
-			}
 			break;
 
 		case FSM_EXTRUDER_WAIT_FOR_HEATER_STATE:
@@ -117,6 +104,9 @@ int updateExtruderFSM(void)
 		case FSM_EXTRUDER_START_CRUSHER_STATE:
 			// apply graduate input to motor
 			setExtruderFsmState("Démarrage du moteur");
+			reverseCrusherMotor(CRUSHER_BWD_SPEED);
+			sleep(5);
+			stopCrusherMotor(CRUSHER_BWD_SPEED);
 			startCrusherMotor(CRUSHER_FWD_SPEED);
 			stateFsmExtruder = FSM_EXTRUDER_OPEN100_STATE;
 			break;
@@ -124,13 +114,14 @@ int updateExtruderFSM(void)
 		case FSM_EXTRUDER_OPEN100_STATE:
 			// open distributor gate to 50%
 			openDitributorGateFSMExtruder();
+			setPosition(POLOLU_CONVOY_MOTOR, CONVOY_MOTOR_BWD);
+			setPosition(POLOLU_EXTRUDER_MOTOR, EXTRUDER_HEATER_RUN);
 			stateFsmExtruder = FSM_EXTRUDER_WAIT_FOR_WEIGHT_STATE;
 			break;
 
 		case FSM_EXTRUDER_WAIT_FOR_WEIGHT_STATE:
 			if(fsmStarted == 1)
 			{
-				setPosition(POLOLU_CONVOY_MOTOR, CONVOY_MOTOR_BWD);
 				countPeriodicReverse++;
 				// read weight
 				setExtruderFsmState("remplissage du convoyeur");
@@ -161,27 +152,23 @@ int updateExtruderFSM(void)
 				break;
 			}else
 			{
-				stateFsmExtruder = FSM_EXTRUDER_END_STATE_FROM_SPEED;
+				stateFsmExtruder = FSM_EXTUDER_EMPTY_CONVOY_TO_GARBAGE_STATE;
 				break;
 			}
-
-		case FSM_EXTRUDER_END_STATE_FROM_SPEED:
-			setExtruderFsmState("Arrêt du système");
-			closeDitributorGateFSMExtruder();
-			stopCrusherMotor(CRUSHER_FWD_SPEED);
-			fsmStarted = 0;
-			returnValue = 0;
-			stateFsmExtruder = FSM_EXTRUDER_IDLE_STATE;
-			break;
 
 		case FSM_EXTUDER_EMPTY_CONVOY_TO_GARBAGE_STATE:
 			// stop crusher motor and wait a bit
 			setExtruderFsmState("Vidage du convoyeur");
+			// stop extruder
+			setPosition(POLOLU_EXTRUDER_MOTOR, EXTRUDER_HEATER_STOP);
+			setPosition(POLOLU_CONVOY_MOTOR, CONVOY_MOTOR_STOP);
+
+			// stop crusher
 			stopCrusherMotor(CRUSHER_FWD_SPEED);
 
 			// empty convoy into distributor
-			setPosition(POLOLU_CONVOY_MOTOR, CONVOY_MOTOR_BWD);
-			sleep(5);
+			setPosition(POLOLU_CONVOY_MOTOR, CONVOY_MOTOR_FWD);
+			sleep(30);
 			setPosition(POLOLU_CONVOY_MOTOR, CONVOY_MOTOR_STOP);
 
 			stateFsmExtruder = FSM_EXTRUDER_END_STATE;
