@@ -9,6 +9,7 @@
 #include "FSM_main.h"
 #include "stdio.h"
 
+// Paramètres d'asservissements
 #define COEFFICIANT1 			0.07075//0.07181
 #define COEFFICIANT2			-0.07065//-0.07179
 
@@ -19,6 +20,10 @@ static volatile double command = 0.0;
 static double tabAction[2] = {0.0, 0.0}; // Y(n)
 static double tabErreur[2] = {0.0, 0.0}; // U(n)
 
+/*
+ * Calculate Action to apply to heater
+ * actualTemp : température actuelle
+ */
 
 double calculateActionToApply(double actualTemp)
 {

@@ -40,21 +40,19 @@ void initCrusherMotor()
  */
 void stopCrusherMotor(int fromSpeed)
 {
-	//TODO
 	// decrement speed and wait 1 second
-	// decrement to 0
 	int i = 0;
 	for(i = fromSpeed; i >= 0 ; i-=CRUSHER_SPEED_INCREMENT)
 	{
 		// set pot value to decrease speed
-		uint8_t potValue = ((int)(((double)(i)/ (double)(100.0))*255));//*((double)(1.0) / (double)(10.0));
+		uint8_t potValue = ((int)(((double)(i)/ (double)(100.0))*255));
 		setPotentiometerValueSPI(potValue);
 
 		// wait
-		sleep(2);
+		sleep(1);
 	}
 
-	// when 0 => brake (0 0)
+	// brake motor
 	setPosition(POLOLU_CRUSHER_MOTOR_CTRL, CRUSHER_MOTOR_FWD);
 	sleep(1);
 }
@@ -64,12 +62,11 @@ void stopCrusherMotor(int fromSpeed)
  */
 void startCrusherMotor(int speed)
 {
-	//TODO
-	// set direction (1 0 or 0 1)? FWD
+	// set direction FWD
 	setPosition(POLOLU_CRUSHER_MOTOR_CTRL, CRUSHER_MOTOR_FWD);
 	sleep(1);
 
-	// increment speed and wait 1 second
+	// increment speed and wait 2 second
 	int i = 0;
 	for(i = 0; i <= speed ; i+=CRUSHER_SPEED_INCREMENT)
 	{
@@ -78,7 +75,7 @@ void startCrusherMotor(int speed)
 		setPotentiometerValueSPI(potValue);
 
 		// wait
-		sleep(2);
+		sleep(1);
 	}
 
 }
@@ -88,13 +85,11 @@ void startCrusherMotor(int speed)
  */
 void reverseCrusherMotor(int speed)
 {
-	//TODO
-	printf("allo je tourne de bord! \n");
-	// set direction (1 0 or 0 1)? BWD
+	// set direction  BWD
 	setPosition(POLOLU_CRUSHER_MOTOR_CTRL, CRUSHER_MOTOR_BWD);
 	sleep(1);
 
-	// increment speed and wait 1 second
+	// increment speed and wait 2 second
 	int i = 0;
 	for(i = 0; i <= speed ; i+=CRUSHER_SPEED_INCREMENT)
 	{
@@ -103,7 +98,7 @@ void reverseCrusherMotor(int speed)
 		setPotentiometerValueSPI(potValue);
 
 		// wait
-		sleep(2);
+		sleep(1);
 	}
 
 }

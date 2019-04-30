@@ -117,6 +117,7 @@ int main(int argc, const char* argv[])
 
 #endif //_CONNECTED
 
+	// init client //
 	const char* serverName = "math-main-pi.local";
 
 	socketFdCmd = initClient(serverName, COMMAND_PORT);
@@ -178,7 +179,7 @@ void *statusThreadFunction(void* param)
 	int sendError;
 	char valueToSend[255];
 
-	printf("allo je suis le thread de status \n");
+	// thread reading and status and sending to interface //
 
 	while(1)
 	{
@@ -248,8 +249,6 @@ void *statusThreadFunction(void* param)
 			// le déchiquteur est bloqué
 			sendMessage(socketFd, "false", strlen("false"), STS_CRUSHER_BLOCKED_MSG, RPI_CONTROL_ID);
 		}
-
-		/******************** FIN VRAI CODE À TESTER POUR LECTURE DES COMPOSANTS ****************************/
 #endif //_CONNECTED
 
 		if(terminated == 1)break;
@@ -269,13 +268,12 @@ void *statusThreadFunction(void* param)
 void *commandThreadFunction(void* param)
 {
 	int socketFd = *((int*)(param));
-	printf("allo je suis le thread de commande \n");
 	// initialize command
 	RPIMessageHeader_t *header = (RPIMessageHeader_t*)malloc(sizeof(RPIMessageHeader_t));
 	char *message = (char*)malloc(255);
 	int exit = -1;
 
-	// read command
+	// thread reading command from interface //
 	while(1)
 	{
 		receiveMessage(socketFd, header, message);
@@ -292,21 +290,7 @@ void *commandThreadFunction(void* param)
 					printf("J'ai mis le pwm \n");
 				}else
 				{
-					//setPosition(((t_pololu_cmd*)message)->channel, ((t_pololu_cmd*)message)->value);
-
-					if(((t_pololu_cmd*)message)->channel == 3)
-					{
-						printf("je stoppe le moteur \n");
-						//setPosition(((t_pololu_cmd*)message)->channel, ((t_pololu_cmd*)message)->value);
-						stopCrusherMotor(20);
-					}
-					else
-					{
-						printf("Je démarre le moteur \n");
-						//setPosition(((t_pololu_cmd*)message)->channel, ((t_pololu_cmd*)message)->value);
-						startCrusherMotor(20);
-					}
-					printf("allo \n");
+					setPosition(((t_pololu_cmd*)message)->channel, ((t_pololu_cmd*)message)->value);
 				}
 
 				exit = ((t_pololu_cmd*)message)->channel;
@@ -314,10 +298,9 @@ void *commandThreadFunction(void* param)
 				break;
 
 			case CRUSHER_MODE_CMD:
-				// get weight
+				// start crusher mode
 				zeroScale(hx711Sruct);
 				mainFsmStatus->requestedWeight = atof(message);
-				printf("Poids demandé : %f\n", mainFsmStatus->requestedWeight);
 				mainFsmStatus->fsmRequestedMode = FSM_CRUSHER_MODE;
 				// start FSM
 				startCrusherFSM();
@@ -325,8 +308,7 @@ void *commandThreadFunction(void* param)
 				break;
 
 			case EXTRUDER_MODE_CMD:
-				//begin extruder mode
-				printf("Allo je vais démarrer le mode extrudeur \n");
+				// start extruder mode
 				mainFsmStatus->requestedTemperature = atof(message);
 				setTemperatureCommand();
 				mainFsmStatus->enslavementStarted = 1;
@@ -373,10 +355,7 @@ void *asservissementTemperatureThreadFunction(void* param)
 		if(mainFsmStatus->enslavementStarted == 1)
 		{
 			// apply enslavement on temperature
-			printf("Requested temp : %f \n", mainFsmStatus->requestedTemperature);
-			printf("Actual temp : %f \n", mainFsmStatus->extruderTemperature);
 			commandToApply = calculateActionToApply(mainFsmStatus->extruderTemperature); // duty cycle
-			printf("Voltage to apply : %f\n", commandToApply);
 
 			// apply command to extruder
 			setPWM(commandToApply);
@@ -399,7 +378,7 @@ void *asservissementTemperatureThreadFunction(void* param)
 
 void *FSMThreadFunction(void* param)
 {
-	printf("Allo je suis le thread de FSM\n");
+	// thread updating FSM //
 	while(1)
 	{
 		// update FSM
@@ -411,6 +390,8 @@ void *FSMThreadFunction(void* param)
 
 		usleep(500000);
 	}
+
+	pthread_exit(NULL);
 }
 
 

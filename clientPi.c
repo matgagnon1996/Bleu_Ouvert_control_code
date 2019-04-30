@@ -14,7 +14,9 @@
 
 static int socketFd = 0;
 
-
+/*
+ * Init function of RPI client
+ */
 int initClient(const char* serverName, int portNumber)
 {
 	// init //
